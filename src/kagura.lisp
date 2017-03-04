@@ -5,12 +5,14 @@
 
 (in-package :cl-user)
 (defpackage kagura
-  (:use :cl))
+  (:use :cl)
+  (:export :make-memory))
 (in-package :kagura)
 
-;(cl-annot:enable-annot-syntax)
+(cl-annot:enable-annot-syntax)
 ;; blah blah blah.
 
+@export
 (defstruct node
   (name "" :type string)
   (attributes (list) :type list)
@@ -20,10 +22,12 @@
                           :element-type 'node)
     :type (vector node)))
 
+@export
 (defstruct html-element
   (tag "" :type string)
   (attributes (list) :type list))
 
+@export
 (defstruct memory
   (stack (make-array 8 :fill-pointer 0
                        :adjustable t
@@ -31,9 +35,10 @@
     :type (vector character))
   (closep nil)
   (tagp nil)
-  (current-node (make-node :token "Document"))
+  (current-node (make-node :name "Document"))
   (state nil))
 
+@export
 (defmacro init-memory (mem)
   `(setf (memory-stack ,mem) (make-array 8 :fill-pointer t :adjustable t :element-type 'character)
          (memory-closep ,mem) nil
@@ -42,6 +47,7 @@
 
 (setf *print-circle* t)
 
+@export
 (defun state-machine (data cursor mem)
   (if (>= cursor (- (length data) 1))
     (memory-current-node mem)
@@ -61,25 +67,26 @@
              (progn (setf next-state nil)
                     (let ((current (memory-current-node mem)))
                       (if (memory-closep mem)
-                        (setf (memory-current-node mem) (node-parent current))
-                        (let ((child (make-node :data
-                                       (make-html-element :tag (memory-stack mem))
-                                                :parent current)))
-                          (vector-push-extend child (node-children current))
-                          (setf (memory-current-node mem) child)))
+                          (setf (memory-current-node mem) (node-parent current))
+                          (let ((grandchild (make-array 1 :fill-pointer 0 :adjustable t :element-type 'node)))
+                            (vector-push-extend (make-html-element :tag (memory-stack mem)) grandchild)
+                            (let ((child (make-node :children grandchild
+                                                    :parent current)))
+                              (vector-push-extend child (node-children current))
+                              (setf (memory-current-node mem) child))))
                       (init-memory mem)))
-             (format t "irregular of tag-close")))
+               (format t "irregular of tag-close")))
       (otherwise (if (or (eq (memory-state mem) :tag-open)
-                 (eq (memory-state mem) :close-tag-open)
-                 (eq (memory-state mem) :tag-name))
-           (setf next-state :tag-name))
-         (vector-push-extend c (memory-stack mem))))
+                         (eq (memory-state mem) :close-tag-open)
+                         (eq (memory-state mem) :tag-name))
+                     (setf next-state :tag-name))
+                 (vector-push-extend c (memory-stack mem))))
       (setf (memory-state mem) next-state)
-    (state-machine data (1+ cursor) mem)))
+      (state-machine data (1+ cursor) mem)))
   )
 
 (defvar *test*
-"<html><head><title>hage</title></head><body><h1>hoge</h1>hagehage</body></html>")
+  "<html><head><title>hage</title></head><body><h1>hoge</h1>hagehage</body></html>")
 
 
 (defun test ()
